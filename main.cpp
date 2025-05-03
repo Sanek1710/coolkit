@@ -31,12 +31,12 @@ struct Complex {
 // Custom printer for Complex
 template <>
 struct Printer<Complex> {
-  static void print(std::ostream& os, const Complex& c) {
+  static void pprint(std::ostream& os, const Complex& c) {
     os << c.real << " + " << c.imag << "i";
   }
 };
 
-// Example class with print method
+// Example class with pprint method
 class Person {
  private:
   std::string name;
@@ -62,7 +62,7 @@ struct Person2 {
   std::vector<std::string> hobbies;
 };
 
-void print(std::ostream& os, const Person2& p2) {
+void pprint(std::ostream& os, const Person2& p2) {
   os << "Person2{\n";
   {
     const indentos indent{os};
@@ -88,49 +88,49 @@ int main(int, char**) {
 
   // Basic usage
   int x = 42;
-  print(std::cout, x);  // Uses ostream operator
+  pprint(std::cout, x);  // Uses ostream operator
 
-  print(std::cerr, Point{1, 2});
+  pprint(std::cerr, Point{1, 2});
 
   // Nested containers
   std::vector<std::pair<int, std::string>> vec = {{1, "one"}, {2, "two"}};
-  print(std::cout, vec);  // Will print: [(1, one), (2, two)]
+  pprint(std::cout, vec);  // Will pprint: [(1, one), (2, two)]
 
-  print(std::cerr, strs);
+  pprint(std::cerr, strs);
 
   std::list<int> lst = {1, 2, 3};
-  print(std::cout, lst);  // [1, 2, 3]
+  pprint(std::cout, lst);  // [1, 2, 3]
 
   // Works with any map-like container
   std::map<int, std::string> map = {{1, "one"}, {2, "two"}};
   std::unordered_map<int, std::string> umap = {{1, "one"}, {2, "two"}};
-  print(std::cout, map);   // {1: one, 2: two}
-  print(std::cout, umap);  // {1: one, 2: two}
+  pprint(std::cout, map);   // {1: one, 2: two}
+  pprint(std::cout, umap);  // {1: one, 2: two}
 
   // Works with any set-like container
   std::set<int> set = {1, 2, 3};
   std::unordered_set<int> uset = {1, 2, 3};
-  print(std::cout, set);   // {1, 2, 3}
-  print(std::cout, uset);  // {1, 2, 3}
+  pprint(std::cout, set);   // {1, 2, 3}
+  pprint(std::cout, uset);  // {1, 2, 3}
 
   // Works with tuples
   std::tuple<int, std::string, double> t = {1, "hello", 3.14};
-  print(std::cout, t);  // (1, hello, 3.14)
+  pprint(std::cout, t);  // (1, hello, 3.14)
 
-  print(std::cout, "Hello");
+  pprint(std::cout, "Hello");
 
-  print(std::cout, "Hello");                    // "Hello"
-  print(std::cout, std::string("Hello"));       // "Hello"
-  print(std::cout, std::string_view("Hello"));  // "Hello"
+  pprint(std::cout, "Hello");                    // "Hello"
+  pprint(std::cout, std::string("Hello"));       // "Hello"
+  pprint(std::cout, std::string_view("Hello"));  // "Hello"
 
   // In containers
   std::vector<const char*> vecc = {"Hello", "World"};
-  print(std::cout, vecc);  // ["Hello", "World"]
+  pprint(std::cout, vecc);  // ["Hello", "World"]
 
   // Usage
   Person p{"John", 30, {"reading", "coding"}};
-  print(std::cout, p);  // Will use Person::print method
+  pprint(std::cout, p);  // Will use Person::pprint method
   Person2 p2{"John", 30, {"reading", "coding"}};
-  print(std::cout, p2);  // Will use Person::print method
+  pprint(std::cout, p2);  // Will use Person::pprint method
   return 0;
 }

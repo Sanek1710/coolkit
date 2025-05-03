@@ -10,14 +10,13 @@
 #include <utility>
 #include <vector>
 
-// #define PPRINT_USE_ABI
+#define PPRINT_USE_ABI
 #ifdef PPRINT_USE_ABI
 #include "cxxabi.h"
 #endif
 
-// Forward declarations
-template <typename T, typename = void>
-struct Printer;
+#include "indentos.h"
+
 
 // Helper to detect if type has print method
 template <typename T, typename = void>
@@ -25,7 +24,7 @@ struct has_print_method : std::false_type {};
 
 template <typename T>
 struct has_print_method<T, std::void_t<decltype(std::declval<T>().print(
-                               std::declval<std::ostream&>()))>>
+                                std::declval<std::ostream&>()))>>
     : std::true_type {};
 
 // Helper to detect if type has ostream operator
@@ -44,7 +43,7 @@ struct is_range : std::false_type {};
 
 template <typename T>
 struct is_range<T, std::void_t<decltype(std::begin(std::declval<T>())),
-                               decltype(std::end(std::declval<T>()))>>
+                                decltype(std::end(std::declval<T>()))>>
     : std::true_type {};
 
 // Helper to detect if type is a map-like container
@@ -53,7 +52,7 @@ struct is_map_like : std::false_type {};
 
 template <typename T>
 struct is_map_like<T,
-                   std::void_t<typename T::key_type, typename T::mapped_type>>
+                    std::void_t<typename T::key_type, typename T::mapped_type>>
     : std::true_type {};
 
 // Helper to detect if type is a set-like container
@@ -77,19 +76,20 @@ std::string get_typename() {
   return result;
 }
 
-// Field printing helper
-template <typename T, typename FT>
-void print_field(std::ostream& os, const T& obj, FT T::*field,
-                 const char* name) {
-  os << name << ": ";
-  Printer<FT>::print(os, obj.*field);
-  os << ",\n";
-}
-
 // Base printer template
-template <typename T, typename>
+template <typename T, typename = void>
 struct Printer {
   static void print(std::ostream& os, const T& val) {
+    if constexpr (has_print_method<T>::value) {
+      val.print(os);
+    } else if constexpr (has_ostream_operator<T>::value) {
+      os << val;
+    } else {
+      os << get_typename<T>() << "{}";
+    }
+  }
+
+  static void pprint(std::ostream& os, const T& val) {
     if constexpr (has_print_method<T>::value) {
       val.print(os);
     } else if constexpr (has_ostream_operator<T>::value) {
@@ -106,6 +106,9 @@ struct Printer<std::string> {
   static void print(std::ostream& os, const std::string& str) {
     os << "\"" << str << "\"";
   }
+  static void pprint(std::ostream& os, const std::string& str) {
+    print(os, str);
+  }
 };
 
 template <>
@@ -113,13 +116,18 @@ struct Printer<std::string_view> {
   static void print(std::ostream& os, const std::string_view& str) {
     os << "\"" << str << "\"";
   }
+  static void pprint(std::ostream& os, const std::string_view& str) {
+    print(os, str);
+  }
 };
 
-// C-style string printer
 template <>
 struct Printer<const char*> {
   static void print(std::ostream& os, const char* str) {
     os << "\"" << str << "\"";
+  }
+  static void pprint(std::ostream& os, const char* str) {
+    print(os, str);
   }
 };
 
@@ -128,12 +136,18 @@ struct Printer<char*> {
   static void print(std::ostream& os, const char* str) {
     os << "\"" << str << "\"";
   }
+  static void pprint(std::ostream& os, const char* str) {
+    print(os, str);
+  }
 };
 
 template <size_t N>
 struct Printer<const char[N]> {
   static void print(std::ostream& os, const char* str) {
     os << "\"" << str << "\"";
+  }
+  static void pprint(std::ostream& os, const char* str) {
+    print(os, str);
   }
 };
 
@@ -142,35 +156,14 @@ struct Printer<char[N]> {
   static void print(std::ostream& os, const char* str) {
     os << "\"" << str << "\"";
   }
-};
-
-// Main pprint function
-template <typename T>
-void print(std::ostream& os, const T& val) {
-  Printer<T>::print(os, val);
-}
-
-// Generic range printer
-template <typename T>
-struct Printer<T,
-               std::enable_if_t<is_range<T>::value && !is_map_like<T>::value &&
-                                !is_set_like<T>::value>> {
-  static void print(std::ostream& os, const T& range) {
-    os << "[";
-    auto it = std::begin(range);
-    auto end = std::end(range);
-    bool first = true;
-    for (; it != end; ++it) {
-      if (!first) os << ", ";
-      Printer<typename std::iterator_traits<decltype(it)>::value_type>::print(
-          os, *it);
-      first = false;
-    }
-    os << "]";
+  static void pprint(std::ostream& os, const char* str) {
+    print(os, str);
   }
 };
 
-// Generic map-like printer
+
+
+// Map printer
 template <typename T>
 struct Printer<T, std::enable_if_t<is_map_like<T>::value>> {
   static void print(std::ostream& os, const T& map) {
@@ -187,12 +180,29 @@ struct Printer<T, std::enable_if_t<is_map_like<T>::value>> {
     }
     os << "}";
   }
+
+  static void pprint(std::ostream& os, const T& map) {
+    os << "{\n";
+    {
+      const indentos indent{os};
+      auto it = std::begin(map);
+      auto end = std::end(map);
+      bool first = true;
+      for (; it != end; ++it) {
+        if (!first) os << ",\n";
+        Printer<typename T::key_type>::pprint(os, it->first);
+        os << ": ";
+        Printer<typename T::mapped_type>::pprint(os, it->second);
+        first = false;
+      }
+    }
+    os << "\n}";
+  }
 };
 
-// Generic set-like printer
+// Set printer
 template <typename T>
-struct Printer<
-    T, std::enable_if_t<is_set_like<T>::value && !is_map_like<T>::value>> {
+struct Printer<T, std::enable_if_t<is_set_like<T>::value && !is_map_like<T>::value>> {
   static void print(std::ostream& os, const T& set) {
     os << "{";
     auto it = std::begin(set);
@@ -204,6 +214,57 @@ struct Printer<
       first = false;
     }
     os << "}";
+  }
+
+  static void pprint(std::ostream& os, const T& set) {
+    os << "{\n";
+    {
+      const indentos indent{os};
+      auto it = std::begin(set);
+      auto end = std::end(set);
+      bool first = true;
+      for (; it != end; ++it) {
+        if (!first) os << ",\n";
+        Printer<typename T::value_type>::pprint(os, *it);
+        first = false;
+      }
+    }
+    os << "\n}";
+  }
+};
+
+// Range printer
+template <typename T>
+struct Printer<T, std::enable_if_t<is_range<T>::value && !is_map_like<T>::value && !is_set_like<T>::value>> {
+  static void print(std::ostream& os, const T& range) {
+    os << "[";
+    auto it = std::begin(range);
+    auto end = std::end(range);
+    bool first = true;
+    for (; it != end; ++it) {
+      if (!first) os << ", ";
+      Printer<typename std::iterator_traits<decltype(it)>::value_type>::print(
+          os, *it);
+      first = false;
+    }
+    os << "]";
+  }
+
+  static void pprint(std::ostream& os, const T& range) {
+    os << "[\n";
+    {
+      const indentos indent{os};
+      auto it = std::begin(range);
+      auto end = std::end(range);
+      bool first = true;
+      for (; it != end; ++it) {
+        if (!first) os << ",\n";
+        Printer<typename std::iterator_traits<decltype(it)>::value_type>::pprint(
+            os, *it);
+        first = false;
+      }
+    }
+    os << "\n]";
   }
 };
 
@@ -217,6 +278,17 @@ struct Printer<std::pair<T1, T2>> {
     Printer<T2>::print(os, pair.second);
     os << ")";
   }
+
+  static void pprint(std::ostream& os, const std::pair<T1, T2>& pair) {
+    os << "(\n";
+    {
+      const indentos indent{os};
+      Printer<T1>::pprint(os, pair.first);
+      os << ",\n";
+      Printer<T2>::pprint(os, pair.second);
+    }
+    os << "\n)";
+  }
 };
 
 // Tuple printer helper
@@ -224,9 +296,21 @@ template <typename Tuple, size_t... Is>
 void print_tuple(std::ostream& os, const Tuple& t, std::index_sequence<Is...>) {
   os << "(";
   ((os << (Is == 0 ? "" : ", "),
-    Printer<std::tuple_element_t<Is, Tuple>>::print(os, std::get<Is>(t))),
+     Printer<std::tuple_element_t<Is, Tuple>>::print(os, std::get<Is>(t))),
    ...);
   os << ")";
+}
+
+template <typename Tuple, size_t... Is>
+void pprint_tuple(std::ostream& os, const Tuple& t, std::index_sequence<Is...>) {
+  os << "(\n";
+  {
+    const indentos indent{os};
+    ((os << (Is == 0 ? "" : ",\n"),
+       Printer<std::tuple_element_t<Is, Tuple>>::pprint(os, std::get<Is>(t))),
+     ...);
+  }
+  os << "\n)";
 }
 
 // Tuple printer
@@ -235,4 +319,38 @@ struct Printer<std::tuple<Types...>> {
   static void print(std::ostream& os, const std::tuple<Types...>& t) {
     print_tuple(os, t, std::index_sequence_for<Types...>{});
   }
+
+  static void pprint(std::ostream& os, const std::tuple<Types...>& t) {
+    pprint_tuple(os, t, std::index_sequence_for<Types...>{});
+  }
 };
+
+// Field printing helper
+template <typename T, typename FT>
+void print_field(std::ostream& os, const T& obj, FT T::*field,
+                 const char* name) {
+  os << name << ": ";
+  Printer<FT>::print(os, obj.*field);
+  os << ",\n";
+}
+
+// Pretty field printing helper
+template <typename T, typename FT>
+void pprint_field(std::ostream& os, const T& obj, FT T::*field,
+                 const char* name, bool& first) {
+  if (!first) os << ",\n";
+  os << name << ": ";
+  Printer<FT>::pprint(os, obj.*field);
+  first = false;
+}
+
+// Main print/pprint functions
+template <typename T>
+void print(std::ostream& os, const T& val) {
+  Printer<T>::print(os, val);
+}
+
+template <typename T>
+void pprint(std::ostream& os, const T& val) {
+  Printer<T>::pprint(os, val);
+}
