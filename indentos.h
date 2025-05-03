@@ -1,5 +1,4 @@
-#ifndef INDENT_OS_H_
-#define INDENT_OS_H_
+#pragma once
 
 #include <iostream>
 #include <string_view>
@@ -18,11 +17,9 @@ class indentos : public std::streambuf {
   }
 
  public:
-  explicit indentos(std::ostream& os, bool newline = false)
+  explicit indentos(std::ostream& os, bool newline = true)
       : rdbuf(os.rdbuf()), newline(newline), os(os) {
     os.rdbuf(this);
   }
   virtual ~indentos() { os.rdbuf(rdbuf); }
 };
-
-#endif
