@@ -14,11 +14,11 @@
 #include <unordered_set>
 #include <vector>
 
-#include "ansi.h"
-#include "indentos.h"
-#include "macro.h"
-#include "memstat.h"
-#include "pprint.h"
+#include "coolkit/ansi.h"
+#include "coolkit/indentos.h"
+#include "coolkit/macro.h"
+#include "coolkit/memstat.h"
+#include "coolkit/pprint.h"
 
 // Custom type with ostream operator
 struct Point {
