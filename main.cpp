@@ -17,6 +17,7 @@
 #include "ansi.h"
 #include "indentos.h"
 #include "macro.h"
+#include "memstat.h"
 #include "pprint.h"
 
 // Custom type with ostream operator
@@ -30,6 +31,7 @@ struct Point {
 // Custom type without ostream operator
 struct Complex {
   double real, imag;
+  INLINE_MEMSTAT(Complex);
 };
 
 // Custom printer for Complex
@@ -52,6 +54,7 @@ class Person {
       : name(std::move(n)), age(a), hobbies(std::move(h)) {}
 
   INLINE_PRINT(Person, name, age, hobbies);
+  INLINE_MEMSTAT(Person, name, age, hobbies);
 };
 
 struct Person2 {
@@ -59,10 +62,11 @@ struct Person2 {
   int age;
   std::vector<std::string> hobbies;
 
-  void print(std::ostream& os) const { os << "FUCK YOU"; }
+  // void print(std::ostream& os) const { os << "FUCK YOU"; }
 };
 
 PRINT_STRUCT(Person2, name, age, hobbies);
+MEMSTAT_STRUCT(Person2, name, age, hobbies);
 
 int main(int, char**) {
   int clr = 0;
@@ -119,7 +123,7 @@ int main(int, char**) {
   print(std::cout, vecc);  // ["Hello", "World"]
 
   // Usage
-  Person p{"John", 30, {"reading", "coding"}};
+  Person p{"John", 30, {"reading", "codingcodingcoding"}};
   print(std::cout, p);  // Will use Person::print method
   Person2 p2{"John", 30, {"reading", "coding"}};
   print(std::cout, p2);  // Will use simplified struct printing
@@ -134,5 +138,18 @@ int main(int, char**) {
   };
 
   print(std::cout, vvec);
+
+  std::cerr << memstat(p) << "\n";
+  std::cerr << memstat(p2) << "\n";
+
+  std::vector<Person2> vp2{p2, p2};
+  print(std::cout, vp2);
+
+  std::string str = "codingcodingcoding";
+  print(std::cout, sizeof(str));
+  print(std::cout, str.capacity());
+  str += 'a';
+  print(std::cout, str.capacity());
+
   return 0;
 }

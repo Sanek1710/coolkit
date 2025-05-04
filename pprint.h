@@ -104,12 +104,26 @@ struct Printer {
   }
 };
 
-// Main print function
+// Main print functions
 template <typename T>
 void print(std::ostream& os, const T& val, const char* nl = "\n") {
   PrintContext ctx(os, nl);
   Printer<T>::print(ctx, val);
 }
+
+template <typename T>
+void printout(const T& val, const char* nl = "\n") {
+  PrintContext ctx(std::cout, nl);
+  Printer<T>::print(ctx, val);
+}
+
+// Main print function
+template <typename T>
+void printerr(const T& val, const char* nl = "\n") {
+  PrintContext ctx(std::cerr, nl);
+  Printer<T>::print(ctx, val);
+}
+
 
 // range print
 
@@ -321,9 +335,12 @@ struct Printer<StructInfo<FieldTs...>> {
   FieldInfo {                      \
 #field, obj.field              \
   }
-#define PRINT_STRUCT(Type, fields...)                                  \
-  inline void print(std::ostream& os, const Type& obj) {               \
-    const auto info = StructInfo(                                      \
-        #Type, PP_FOREACH_LIST(PP_BIND(OBJ_FIELD_INFO, obj), fields)); \
-    ::print(os, info);                                                 \
-  }
+#define PRINT_STRUCT(Type, fields...)                                    \
+  template <>                                                            \
+  struct Printer<Type> {                                                 \
+    static void print(PrintContext ctx, const Type& obj) {               \
+      const auto info = StructInfo(                                      \
+          #Type, PP_FOREACH_LIST(PP_BIND(OBJ_FIELD_INFO, obj), fields)); \
+      ::print(ctx.os, info);                                             \
+    }                                                                    \
+  };
