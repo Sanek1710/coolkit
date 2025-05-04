@@ -154,15 +154,16 @@ struct is_small_type<T, std::enable_if_t<is_string_like_v<T>>>
 template <typename T>
 constexpr bool is_small_type_v = is_small_type<T>::value;
 
-struct ListPuctuators {
+struct PunctuatorSet {
   const char* start;
   const char* sep;
   const char* end;
 };
-
-static constexpr ListPuctuators punct_keylist{"{", ", ", "}"};
-static constexpr ListPuctuators punct_dynlist{"[", ", ", "]"};
-static constexpr ListPuctuators punct_statlist{"(", ", ", ")"};
+namespace punct {
+static constexpr PunctuatorSet keylist{"{", ", ", "}"};
+static constexpr PunctuatorSet dynlist{"[", ", ", "]"};
+static constexpr PunctuatorSet statlist{"(", ", ", ")"};
+};  // namespace punct
 
 // range printer
 template <typename T>
@@ -171,8 +172,8 @@ struct Printer<T, std::enable_if_t<is_range_v<T> && !is_string_like_v<T>>> {
     using value_type =
         typename std::iterator_traits<decltype(std::begin(range))>::value_type;
     static constexpr bool is_small = is_small_type_v<value_type>;
-    static constexpr ListPuctuators punct =
-        has_keys_v<T> ? punct_keylist : punct_dynlist;
+    static constexpr PunctuatorSet punct =
+        has_keys_v<T> ? punct::keylist : punct::dynlist;
     if constexpr (!is_map_like_v<T>) ctx.nl = is_small ? "" : ctx.nl;
 
     ctx.os << punct.start;
@@ -203,7 +204,7 @@ template <typename T1, typename T2>
 struct Printer<std::pair<T1, T2>> {
   static void print(PrintContext ctx, const std::pair<T1, T2>& pair) {
     const bool is_small = is_small_type_v<T1> && is_small_type_v<T2>;
-    static constexpr ListPuctuators punct = punct_statlist;
+    static constexpr PunctuatorSet punct = punct::statlist;
     ctx.nl = is_small ? "" : ctx.nl;
 
     ctx.os << punct.start;
@@ -220,19 +221,23 @@ struct Printer<std::pair<T1, T2>> {
 
 // tuple printer
 
-template <typename Tuple, size_t... Is>
-void print_tuple(PrintContext ctx, const Tuple& t, std::index_sequence<Is...>,
-                 ListPuctuators punct) {
-  const bool is_small =
-      (is_small_type<std::tuple_element_t<Is, Tuple>>::value && ...);
+template <typename... Types>
+void print_tuple(PrintContext ctx, const std::tuple<Types...>& t,
+                 PunctuatorSet punct) {
+  const bool is_small = (is_small_type<Types>::value && ...);
   ctx.nl = is_small ? "" : ctx.nl;
 
   ctx.os << punct.start;
   {
     const indentos indent{ctx.os, false};
-    ((ctx.os << (Is == 0 ? "" : punct.sep) << ctx.nl,
-      Printer<std::tuple_element_t<Is, Tuple>>::print(ctx, std::get<Is>(t))),
-     ...);
+    std::apply(
+        [&](auto... args) {
+          bool first = true;
+          ((ctx.os << (first ? "" : punct.sep) << ctx.nl, first = false,
+            Printer<decltype(args)>::print(ctx, args)),
+           ...);
+        },
+        t);
   }
   ctx.os << ctx.nl << punct.end;
 }
@@ -240,7 +245,7 @@ void print_tuple(PrintContext ctx, const Tuple& t, std::index_sequence<Is...>,
 template <typename... Types>
 struct Printer<std::tuple<Types...>> {
   static void print(PrintContext ctx, const std::tuple<Types...>& t) {
-    print_tuple(ctx, t, std::index_sequence_for<Types...>{}, punct_statlist);
+    print_tuple(ctx, t, punct::statlist);
   }
 };
 
@@ -262,42 +267,21 @@ struct FieldInfo {
   const char* name;
   const FieldT& value;
 };
-
-// Deduction guide for FieldInfo
 template <typename FieldT>
 FieldInfo(const char*, const FieldT&) -> FieldInfo<FieldT>;
 
-// Strings are small if they're short
 template <typename FieldT>
 struct is_small_type<FieldInfo<FieldT>> : std::false_type {};
-
-template <typename... FieldTs>
-struct FieldInfos : std::tuple<FieldInfo<FieldTs>...> {
-  // using std::tuple<FieldInfo<FieldTs>...>::tuple;
-  constexpr FieldInfos(const std::tuple<FieldInfo<FieldTs>...>& field_infos)
-      : std::tuple<FieldInfo<FieldTs>...>(field_infos) {}
-};
-template <typename... FieldTs>
-FieldInfos(const std::tuple<FieldInfo<FieldTs>...>&) -> FieldInfos<FieldTs...>;
 
 template <typename... FieldTs>
 struct StructInfo {
   const char* tname;
   std::tuple<FieldInfo<FieldTs>...> field_infos;
-  // FieldInfos<FieldTs...> field_infos;
 
   constexpr StructInfo(const char* tname, FieldInfo<FieldTs>... fields)
       : tname(tname), field_infos(std::make_tuple(fields...)) {}
 };
 
-// Helper function to create StructInfo with simpler syntax
-template <typename... FieldTs>
-constexpr auto make_struct_info(const char* tname,
-                                FieldInfo<FieldTs>... fields) {
-  return StructInfo<FieldTs...>{tname, fields...};
-}
-
-// FieldInfo printer
 template <typename T>
 struct Printer<FieldInfo<T>> {
   static void print(PrintContext ctx, const FieldInfo<T>& field_info) {
@@ -310,7 +294,6 @@ struct Printer<FieldInfo<T>> {
   }
 };
 
-// StructInfo printer
 template <typename... FieldTs>
 struct Printer<StructInfo<FieldTs...>> {
   static void print(PrintContext ctx,
@@ -318,8 +301,7 @@ struct Printer<StructInfo<FieldTs...>> {
     ctx.os << Theme::color_typename;
     ctx.os << struct_info.tname;
     ctx.os << Theme::color_reset;
-    print_tuple(ctx, struct_info.field_infos,
-                std::index_sequence_for<FieldTs...>{}, punct_keylist);
+    print_tuple(ctx, struct_info.field_infos, punct::keylist);
   }
 };
 
@@ -329,11 +311,10 @@ struct Printer<StructInfo<FieldTs...>> {
   FieldInfo {             \
 #field, field         \
   }
-#define INLINE_PRINT(Type, fields...)                                 \
-  void print(std::ostream& os) const {                                \
-    const auto info =                                                 \
-        make_struct_info(#Type, PP_FOREACH_LIST(FIELD_INFO, fields)); \
-    ::print(os, info);                                                \
+#define INLINE_PRINT(Type, fields...)                                         \
+  void print(std::ostream& os) const {                                        \
+    const auto info = StructInfo(#Type, PP_FOREACH_LIST(FIELD_INFO, fields)); \
+    ::print(os, info);                                                        \
   }
 
 #define OBJ_FIELD_INFO(obj, field) \
@@ -342,7 +323,7 @@ struct Printer<StructInfo<FieldTs...>> {
   }
 #define PRINT_STRUCT(Type, fields...)                                  \
   inline void print(std::ostream& os, const Type& obj) {               \
-    const auto info = make_struct_info(                                \
+    const auto info = StructInfo(                                      \
         #Type, PP_FOREACH_LIST(PP_BIND(OBJ_FIELD_INFO, obj), fields)); \
     ::print(os, info);                                                 \
   }
