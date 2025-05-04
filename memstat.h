@@ -32,20 +32,21 @@ struct Memsize {
 };
 
 inline std::ostream& operator<<(std::ostream& os, Memsize memsize) {
-  const char* units[] = {"b", "Kb", "Mb", "Gb", "Tb", "Pb", "Eb"};
+  const char* units[] = {"", "K", "M", "G", "T", "P", "E"};
   size_t value = memsize.nbytes;
   int unit = 0;
 
-  while (value >= 1024 && unit < 6) {
-    value = (value * 100) / 1024;  // Convert to next unit with 2 decimal places
-    unit++;
-  }
+  size_t bits = 0;
+  for (size_t n = value; n > 0; n >>= 1) bits++;
+  unit = (bits - 1) / 10;
 
-  if (unit == 0) {
-    os << value << " " << units[unit];
+  if (unit > 0) {
+    size_t divisor = size_t(1) << (unit * 10);
+    size_t whole = value / divisor;
+    size_t fraction = ((value % divisor) * 100) / divisor;
+    os << whole << "." << std::setw(2) << std::setfill('0') << fraction << units[unit];
   } else {
-    os << value / 100 << "." << std::setw(2) << std::setfill('0') << value % 100
-       << " " << units[unit];
+    os << value << units[unit];
   }
   return os;
 }
@@ -211,7 +212,8 @@ struct Memstat<std::stack<T, C>> {
 };
 
 // Convenience macros for adding memstat to structures
-#define MEMSTAT_FIELD(res, field) size += ::memstat(field).nbytes - sizeof(field)
+#define MEMSTAT_FIELD(res, field) \
+  size += ::memstat(field).nbytes - sizeof(field)
 #define INLINE_MEMSTAT(Type, fields...)                    \
   size_t memstat() const {                                 \
     size_t size = sizeof(Type);                            \

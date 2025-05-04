@@ -106,12 +106,14 @@ void print(std::ostream& os, const T& val) {
 template <typename T>
 void printout(const T& val) {
   Printer<T>::print(std::cout, val);
+  std::cout << "\n";
 }
 
 // Main print function
 template <typename T>
 void printerr(const T& val) {
   Printer<T>::print(std::cerr, val);
+  std::cerr << "\n";
 }
 
 // range print

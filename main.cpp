@@ -61,8 +61,6 @@ struct Person2 {
   std::string name;
   int age;
   std::vector<std::string> hobbies;
-
-  // void print(std::ostream& os) const { os << "FUCK YOU"; }
 };
 
 PRINT_STRUCT(Person2, name, age, hobbies);
@@ -83,53 +81,53 @@ int main(int, char**) {
 
   // Basic usage
   int x = 42;
-  print(std::cout, x);  // Uses ostream operator
+  printout(x);  // Uses ostream operator
 
   print(std::cerr, Point{1, 2});
 
   // Nested containers
   std::vector<std::pair<int, std::string>> vec = {{1, "one"}, {2, "two"}};
-  print(std::cout, vec);  // Will print: [(1, one), (2, two)]
+  printout(vec);  // Will print: [(1, one), (2, two)]
 
   print(std::cerr, strs);
 
   std::list<int> lst = {1, 2, 3};
-  print(std::cout, lst);  // [1, 2, 3]
+  printout(lst);  // [1, 2, 3]
 
   // Works with any map-like container
   std::map<int, std::string> map = {{1, "one"}, {2, "two"}};
   std::unordered_map<int, std::string> umap = {{1, "one"}, {2, "two"}};
-  print(std::cout, map);   // {1: one, 2: two}
-  print(std::cout, umap);  // {1: one, 2: two}
+  printout(map);   // {1: one, 2: two}
+  printout(umap);  // {1: one, 2: two}
 
   // Works with any set-like container
   std::set<int> set = {1, 2, 3};
   std::unordered_set<int> uset = {1, 2, 3};
-  print(std::cout, set);   // {1, 2, 3}
-  print(std::cout, uset);  // {1, 2, 3}
+  printout(set);   // {1, 2, 3}
+  printout(uset);  // {1, 2, 3}
 
   // Works with tuples
   std::tuple<int, std::string, double> t = {1, "hello", 3.14};
-  print(std::cout, t);  // (1, hello, 3.14)
+  printout(t);  // (1, hello, 3.14)
 
-  print(std::cout, "Hello");
+  printout("Hello");
 
-  print(std::cout, "Hello");                    // "Hello"
-  print(std::cout, std::string("Hello"));       // "Hello"
-  print(std::cout, std::string_view("Hello"));  // "Hello"
+  printout("Hello");                    // "Hello"
+  printout(std::string("Hello"));       // "Hello"
+  printout(std::string_view("Hello"));  // "Hello"
 
   // In containers
   std::vector<const char*> vecc = {"Hello", "World"};
-  print(std::cout, vecc);  // ["Hello", "World"]
+  printout(vecc);  // ["Hello", "World"]
 
   // Usage
   Person p{"John", 30, {"reading", "codingcodingcoding"}};
-  print(std::cout, p);  // Will use Person::print method
+  printout(p);  // Will use Person::print method
   Person2 p2{"John", 30, {"reading", "coding"}};
-  print(std::cout, p2);  // Will use simplified struct printing
+  printout(p2);  // Will use simplified struct printing
 
   std::optional<std::string> opts = std::nullopt;
-  print(std::cout, opts);
+  printout(opts);
 
   std::vector<std::vector<int>> vvec{
       {1, 2, 3},
@@ -137,19 +135,19 @@ int main(int, char**) {
       {7, 8, 9, 10},
   };
 
-  print(std::cout, vvec);
+  printout(vvec);
 
   std::cerr << memstat(p) << "\n";
   std::cerr << memstat(p2) << "\n";
 
   std::vector<Person2> vp2{p2, p2};
-  print(std::cout, vp2);
+  printout(vp2);
 
   std::string str = "codingcodingcoding";
-  print(std::cout, sizeof(str));
-  print(std::cout, str.capacity());
+  printout(sizeof(str));
+  printout(str.capacity());
   str += 'a';
-  print(std::cout, str.capacity());
+  printout(str.capacity());
 
   return 0;
 }
