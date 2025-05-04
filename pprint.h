@@ -124,7 +124,6 @@ void printerr(const T& val, const char* nl = "\n") {
   Printer<T>::print(ctx, val);
 }
 
-
 // range print
 
 template <typename T, typename = void>

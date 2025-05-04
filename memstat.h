@@ -3,9 +3,11 @@
 #include <cstddef>
 #include <deque>
 #include <forward_list>
+#include <iomanip>
 #include <list>
 #include <map>
 #include <optional>
+#include <ostream>
 #include <set>
 #include <stack>
 #include <string>
@@ -25,6 +27,29 @@ struct has_memstat_method<T, std::void_t<decltype(std::declval<T>().memstat())>>
 template <typename T>
 constexpr bool has_memstat_method_v = has_memstat_method<T>::value;
 
+struct Memsize {
+  size_t nbytes = 0;
+};
+
+inline std::ostream& operator<<(std::ostream& os, Memsize memsize) {
+  const char* units[] = {"b", "Kb", "Mb", "Gb", "Tb", "Pb", "Eb"};
+  size_t value = memsize.nbytes;
+  int unit = 0;
+
+  while (value >= 1024 && unit < 6) {
+    value = (value * 100) / 1024;  // Convert to next unit with 2 decimal places
+    unit++;
+  }
+
+  if (unit == 0) {
+    os << value << " " << units[unit];
+  } else {
+    os << value / 100 << "." << std::setw(2) << std::setfill('0') << value % 100
+       << " " << units[unit];
+  }
+  return os;
+}
+
 template <typename T, typename = void>
 struct Memstat {
   static size_t memstat(const T& val) {
@@ -38,8 +63,8 @@ struct Memstat {
 
 // Main function
 template <typename T>
-size_t memstat(const T& val) {
-  return Memstat<T>::memstat(val);
+Memsize memstat(const T& val) {
+  return {Memstat<T>::memstat(val)};
 }
 
 // std::string
@@ -186,7 +211,7 @@ struct Memstat<std::stack<T, C>> {
 };
 
 // Convenience macros for adding memstat to structures
-#define MEMSTAT_FIELD(res, field) size += ::memstat(field) - sizeof(field)
+#define MEMSTAT_FIELD(res, field) size += ::memstat(field).nbytes - sizeof(field)
 #define INLINE_MEMSTAT(Type, fields...)                    \
   size_t memstat() const {                                 \
     size_t size = sizeof(Type);                            \
@@ -195,7 +220,7 @@ struct Memstat<std::stack<T, C>> {
   }
 
 #define OBJ_MEMSTAT_FIELD(res, obj, field) \
-  res += ::memstat(obj.field) - sizeof(obj.field)
+  res += ::memstat(obj.field).nbytes - sizeof(obj.field)
 #define MEMSTAT_STRUCT(Type, fields...)                               \
   template <>                                                         \
   struct Memstat<Type> {                                              \
