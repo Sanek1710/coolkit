@@ -12,8 +12,16 @@
 #endif
 
 #include "indentos.h"
+#include "macro.h"
 
-
+namespace Theme {
+static constexpr auto color_typename = ansi::fg::rgb(0x4EC9B0);
+static constexpr auto color_number = ansi::fg::rgb(0xB5CEA8);
+static constexpr auto color_string = ansi::fg::rgb(0xCE9178);
+static constexpr auto color_constant = ansi::fg::rgb(0x4FC1FF);
+static constexpr auto color_variable = ansi::fg::rgb(0x9CDCFE);
+static constexpr auto color_reset = ansi::fg::deflt;
+}  // namespace Theme
 
 // Helper to detect if type has print method
 template <typename T, typename = void>
@@ -40,7 +48,6 @@ struct has_ostream_operator<
 template <typename T>
 constexpr bool has_ostream_operator_v = has_ostream_operator<T>::value;
 
-
 // Helper to detect string-like types
 template <typename T>
 struct is_string_like : std::is_constructible<std::string_view, T> {};
@@ -53,7 +60,6 @@ template <typename T, typename = void>
 struct is_small_type {
   static constexpr bool value = sizeof(T) < 16;
 };
-
 
 struct PrintContext {
   std::ostream& os;
@@ -82,22 +88,21 @@ struct Printer {
     if constexpr (has_print_method_v<T>) {
       val.print(ctx.os);
     } else if (is_string_like_v<T>) {
-      ctx.os << ansi::fg::rgb(236, 177, 126);
+      ctx.os << Theme::color_string;
       ctx.os << "\"" << val << "\"";
-      ctx.os << ansi::fg::deflt;
+      ctx.os << Theme::color_reset;
     } else if constexpr (has_ostream_operator_v<T>) {
       if (std::is_integral_v<T> || std::is_floating_point_v<T>)
-        ctx.os << ansi::fg::rgb(172, 226, 182);
+        ctx.os << Theme::color_number;
       ctx.os << val;
-      ctx.os << ansi::fg::deflt;
+      ctx.os << Theme::color_reset;
     } else {
-      ctx.os << ansi::fg::rgb(36, 142, 110);
+      ctx.os << Theme::color_typename;
       ctx.os << get_typename<T>() << "{}";
-      ctx.os << ansi::fg::deflt;
+      ctx.os << Theme::color_reset;
     }
   }
 };
-
 
 // Main print function
 template <typename T>
@@ -105,8 +110,6 @@ void print(std::ostream& os, const T& val, const char* nl = "\n") {
   PrintContext ctx(os, nl);
   Printer<T>::print(ctx, val);
 }
-
-
 
 // range print
 
@@ -144,15 +147,12 @@ struct is_map_like<T,
 template <typename T>
 constexpr bool is_map_like_v = is_map_like<T>::value;
 
-
 template <typename T>
 struct is_small_type<T, std::enable_if_t<is_string_like_v<T>>>
     : std::true_type {};
 
 template <typename T>
 constexpr bool is_small_type_v = is_small_type<T>::value;
-
-
 
 struct ListPuctuators {
   const char* start;
@@ -174,7 +174,7 @@ struct Printer<T, std::enable_if_t<is_range_v<T> && !is_string_like_v<T>>> {
     static constexpr ListPuctuators punct =
         has_keys_v<T> ? punct_keylist : punct_dynlist;
     if constexpr (!is_map_like_v<T>) ctx.nl = is_small ? "" : ctx.nl;
-      
+
     ctx.os << punct.start;
     {
       const indentos indent{ctx.os, false};
@@ -249,12 +249,11 @@ template <typename T>
 struct Printer<std::optional<T>> {
   static void print(PrintContext ctx, const std::optional<T>& opt) {
     if (opt) return Printer<T>::print(ctx, *opt);
-    ctx.os << ansi::fg::rgb(109, 183, 229);
+    ctx.os << Theme::color_constant;
     ctx.os << "<nullopt>";
-    ctx.os << ansi::fg::deflt;
+    ctx.os << Theme::color_reset;
   }
 };
-
 
 // struct printer
 
@@ -302,10 +301,10 @@ constexpr auto make_struct_info(const char* tname,
 template <typename T>
 struct Printer<FieldInfo<T>> {
   static void print(PrintContext ctx, const FieldInfo<T>& field_info) {
-    ctx.os << "."                           //
-           << ansi::fg::rgb(163, 223, 233)  //
-           << field_info.name               //
-           << ansi::fg::deflt               //
+    ctx.os << "."                    //
+           << Theme::color_variable  //
+           << field_info.name        //
+           << Theme::color_reset     //
            << "= ";
     Printer<T>::print(ctx, field_info.value);
   }
@@ -316,10 +315,34 @@ template <typename... FieldTs>
 struct Printer<StructInfo<FieldTs...>> {
   static void print(PrintContext ctx,
                     const StructInfo<FieldTs...>& struct_info) {
-    ctx.os << ansi::fg::rgb(99, 184, 159);
+    ctx.os << Theme::color_typename;
     ctx.os << struct_info.tname;
-    ctx.os << ansi::fg::deflt;
+    ctx.os << Theme::color_reset;
     print_tuple(ctx, struct_info.field_infos,
                 std::index_sequence_for<FieldTs...>{}, punct_keylist);
   }
 };
+
+// convenience macro
+
+#define FIELD_INFO(field) \
+  FieldInfo {             \
+#field, field         \
+  }
+#define INLINE_PRINT(Type, fields...)                                 \
+  void print(std::ostream& os) const {                                \
+    const auto info =                                                 \
+        make_struct_info(#Type, PP_FOREACH_LIST(FIELD_INFO, fields)); \
+    ::print(os, info);                                                \
+  }
+
+#define OBJ_FIELD_INFO(obj, field) \
+  FieldInfo {                      \
+#field, obj.field              \
+  }
+#define PRINT_STRUCT(Type, fields...)                                  \
+  inline void print(std::ostream& os, const Type& obj) {               \
+    const auto info = make_struct_info(                                \
+        #Type, PP_FOREACH_LIST(PP_BIND(OBJ_FIELD_INFO, obj), fields)); \
+    ::print(os, info);                                                 \
+  }

@@ -16,6 +16,7 @@
 
 #include "ansi.h"
 #include "indentos.h"
+#include "macro.h"
 #include "pprint.h"
 
 // Custom type with ostream operator
@@ -50,14 +51,7 @@ class Person {
   Person(std::string n, int a, std::vector<std::string> h)
       : name(std::move(n)), age(a), hobbies(std::move(h)) {}
 
-  void print(std::ostream& os) const {
-    const auto info = make_struct_info(  //
-        "Person",                        //
-        FieldInfo{"name", name},         //
-        FieldInfo{"age", age},           //
-        FieldInfo{"hobbies", hobbies});
-    ::print(os, info);
-  }
+  INLINE_PRINT(Person, name, age, hobbies);
 };
 
 struct Person2 {
@@ -65,19 +59,10 @@ struct Person2 {
   int age;
   std::vector<std::string> hobbies;
 
-  void print(std::ostream& os) const {
-    os << "FUCK YOU";
-  }
+  void print(std::ostream& os) const { os << "FUCK YOU"; }
 };
 
-void print(std::ostream& os, const Person2& p2) {
-  const auto info = make_struct_info(  //
-      "Person2",                       //
-      FieldInfo{"name", p2.name},      //
-      FieldInfo{"age", p2.age},        //
-      FieldInfo{"hobbies", p2.hobbies});
-  ::print(os, info);
-}
+PRINT_STRUCT(Person2, name, age, hobbies);
 
 int main(int, char**) {
   int clr = 0;
