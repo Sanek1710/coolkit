@@ -1,14 +1,10 @@
-#include <cstddef>
-#include <iostream>
-#include <map>
-#include <ostream>
-#include <set>
-#include <string>
-#include <string_view>
+#pragma once
+
+#include <optional>
 #include <tuple>
 #include <type_traits>
-#include <utility>
-#include <vector>
+
+#include "ansi.h"
 
 #define PPRINT_USE_ABI
 #ifdef PPRINT_USE_ABI
@@ -18,14 +14,18 @@
 #include "indentos.h"
 
 
+
 // Helper to detect if type has print method
 template <typename T, typename = void>
 struct has_print_method : std::false_type {};
 
 template <typename T>
 struct has_print_method<T, std::void_t<decltype(std::declval<T>().print(
-                                std::declval<std::ostream&>()))>>
+                               std::declval<std::ostream&>()))>>
     : std::true_type {};
+
+template <typename T>
+constexpr bool has_print_method_v = has_print_method<T>::value;
 
 // Helper to detect if type has ostream operator
 template <typename T, typename = void>
@@ -37,31 +37,30 @@ struct has_ostream_operator<
     std::void_t<decltype(std::declval<std::ostream&>() << std::declval<T>())>>
     : std::true_type {};
 
-// Helper to detect if type is a range
-template <typename T, typename = void>
-struct is_range : std::false_type {};
+template <typename T>
+constexpr bool has_ostream_operator_v = has_ostream_operator<T>::value;
+
+
+// Helper to detect string-like types
+template <typename T>
+struct is_string_like : std::is_constructible<std::string_view, T> {};
 
 template <typename T>
-struct is_range<T, std::void_t<decltype(std::begin(std::declval<T>())),
-                                decltype(std::end(std::declval<T>()))>>
-    : std::true_type {};
+constexpr bool is_string_like_v = is_string_like<T>::value;
 
-// Helper to detect if type is a map-like container
+// Helper to estimate if a type is "small"
 template <typename T, typename = void>
-struct is_map_like : std::false_type {};
+struct is_small_type {
+  static constexpr bool value = sizeof(T) < 16;
+};
 
-template <typename T>
-struct is_map_like<T,
-                    std::void_t<typename T::key_type, typename T::mapped_type>>
-    : std::true_type {};
 
-// Helper to detect if type is a set-like container
-template <typename T, typename = void>
-struct is_set_like : std::false_type {};
+struct PrintContext {
+  std::ostream& os;
+  const char* nl;
 
-template <typename T>
-struct is_set_like<T, std::void_t<typename T::key_type, typename T::value_type>>
-    : std::true_type {};
+  PrintContext(std::ostream& os, const char* nl = "\n") : os(os), nl(nl) {}
+};
 
 // Helper to get type name
 template <typename T>
@@ -79,278 +78,248 @@ std::string get_typename() {
 // Base printer template
 template <typename T, typename = void>
 struct Printer {
-  static void print(std::ostream& os, const T& val) {
-    if constexpr (has_print_method<T>::value) {
-      val.print(os);
-    } else if constexpr (has_ostream_operator<T>::value) {
-      os << val;
+  static void print(PrintContext ctx, const T& val) {
+    if constexpr (has_print_method_v<T>) {
+      val.print(ctx.os);
+    } else if (is_string_like_v<T>) {
+      ctx.os << ansi::fg::rgb(236, 177, 126);
+      ctx.os << "\"" << val << "\"";
+      ctx.os << ansi::fg::deflt;
+    } else if constexpr (has_ostream_operator_v<T>) {
+      if (std::is_integral_v<T> || std::is_floating_point_v<T>)
+        ctx.os << ansi::fg::rgb(172, 226, 182);
+      ctx.os << val;
+      ctx.os << ansi::fg::deflt;
     } else {
-      os << get_typename<T>() << "{}";
-    }
-  }
-
-  static void pprint(std::ostream& os, const T& val) {
-    if constexpr (has_print_method<T>::value) {
-      val.print(os);
-    } else if constexpr (has_ostream_operator<T>::value) {
-      os << val;
-    } else {
-      os << get_typename<T>() << "{}";
+      ctx.os << ansi::fg::rgb(36, 142, 110);
+      ctx.os << get_typename<T>() << "{}";
+      ctx.os << ansi::fg::deflt;
     }
   }
 };
 
-// String printer
-template <>
-struct Printer<std::string> {
-  static void print(std::ostream& os, const std::string& str) {
-    os << "\"" << str << "\"";
-  }
-  static void pprint(std::ostream& os, const std::string& str) {
-    print(os, str);
-  }
-};
 
-template <>
-struct Printer<std::string_view> {
-  static void print(std::ostream& os, const std::string_view& str) {
-    os << "\"" << str << "\"";
-  }
-  static void pprint(std::ostream& os, const std::string_view& str) {
-    print(os, str);
-  }
-};
-
-template <>
-struct Printer<const char*> {
-  static void print(std::ostream& os, const char* str) {
-    os << "\"" << str << "\"";
-  }
-  static void pprint(std::ostream& os, const char* str) {
-    print(os, str);
-  }
-};
-
-template <>
-struct Printer<char*> {
-  static void print(std::ostream& os, const char* str) {
-    os << "\"" << str << "\"";
-  }
-  static void pprint(std::ostream& os, const char* str) {
-    print(os, str);
-  }
-};
-
-template <size_t N>
-struct Printer<const char[N]> {
-  static void print(std::ostream& os, const char* str) {
-    os << "\"" << str << "\"";
-  }
-  static void pprint(std::ostream& os, const char* str) {
-    print(os, str);
-  }
-};
-
-template <size_t N>
-struct Printer<char[N]> {
-  static void print(std::ostream& os, const char* str) {
-    os << "\"" << str << "\"";
-  }
-  static void pprint(std::ostream& os, const char* str) {
-    print(os, str);
-  }
-};
-
-
-
-// Map printer
+// Main print function
 template <typename T>
-struct Printer<T, std::enable_if_t<is_map_like<T>::value>> {
-  static void print(std::ostream& os, const T& map) {
-    os << "{";
-    auto it = std::begin(map);
-    auto end = std::end(map);
-    bool first = true;
-    for (; it != end; ++it) {
-      if (!first) os << ", ";
-      Printer<typename T::key_type>::print(os, it->first);
-      os << ": ";
-      Printer<typename T::mapped_type>::print(os, it->second);
-      first = false;
-    }
-    os << "}";
-  }
+void print(std::ostream& os, const T& val, const char* nl = "\n") {
+  PrintContext ctx(os, nl);
+  Printer<T>::print(ctx, val);
+}
 
-  static void pprint(std::ostream& os, const T& map) {
-    os << "{\n";
-    {
-      const indentos indent{os};
-      auto it = std::begin(map);
-      auto end = std::end(map);
-      bool first = true;
-      for (; it != end; ++it) {
-        if (!first) os << ",\n";
-        Printer<typename T::key_type>::pprint(os, it->first);
-        os << ": ";
-        Printer<typename T::mapped_type>::pprint(os, it->second);
-        first = false;
-      }
-    }
-    os << "\n}";
-  }
+
+
+// range print
+
+template <typename T, typename = void>
+struct is_range : std::false_type {};
+
+template <typename T>
+struct is_range<T, std::void_t<decltype(std::begin(std::declval<T>())),
+                               decltype(std::end(std::declval<T>()))>>
+    : std::true_type {};
+
+template <typename T>
+constexpr bool is_range_v = is_range<T>::value;
+
+// Helper to detect if type is a set-like container
+template <typename T, typename = void>
+struct has_keys : std::false_type {};
+
+template <typename T>
+struct has_keys<T, std::void_t<typename T::key_type, typename T::value_type>>
+    : std::true_type {};
+
+template <typename T>
+constexpr bool has_keys_v = has_keys<T>::value;
+
+// Helper to detect if type is a map-like container
+template <typename T, typename = void>
+struct is_map_like : std::false_type {};
+
+template <typename T>
+struct is_map_like<T,
+                   std::void_t<typename T::key_type, typename T::mapped_type>>
+    : std::true_type {};
+
+template <typename T>
+constexpr bool is_map_like_v = is_map_like<T>::value;
+
+
+template <typename T>
+struct is_small_type<T, std::enable_if_t<is_string_like_v<T>>>
+    : std::true_type {};
+
+template <typename T>
+constexpr bool is_small_type_v = is_small_type<T>::value;
+
+
+
+struct ListPuctuators {
+  const char* start;
+  const char* sep;
+  const char* end;
 };
 
-// Set printer
+static constexpr ListPuctuators punct_keylist{"{", ", ", "}"};
+static constexpr ListPuctuators punct_dynlist{"[", ", ", "]"};
+static constexpr ListPuctuators punct_statlist{"(", ", ", ")"};
+
+// range printer
 template <typename T>
-struct Printer<T, std::enable_if_t<is_set_like<T>::value && !is_map_like<T>::value>> {
-  static void print(std::ostream& os, const T& set) {
-    os << "{";
-    auto it = std::begin(set);
-    auto end = std::end(set);
-    bool first = true;
-    for (; it != end; ++it) {
-      if (!first) os << ", ";
-      Printer<typename T::value_type>::print(os, *it);
-      first = false;
-    }
-    os << "}";
-  }
-
-  static void pprint(std::ostream& os, const T& set) {
-    os << "{\n";
+struct Printer<T, std::enable_if_t<is_range_v<T> && !is_string_like_v<T>>> {
+  static void print(PrintContext ctx, const T& range) {
+    using value_type =
+        typename std::iterator_traits<decltype(std::begin(range))>::value_type;
+    static constexpr bool is_small = is_small_type_v<value_type>;
+    static constexpr ListPuctuators punct =
+        has_keys_v<T> ? punct_keylist : punct_dynlist;
+    if constexpr (!is_map_like_v<T>) ctx.nl = is_small ? "" : ctx.nl;
+      
+    ctx.os << punct.start;
     {
-      const indentos indent{os};
-      auto it = std::begin(set);
-      auto end = std::end(set);
-      bool first = true;
-      for (; it != end; ++it) {
-        if (!first) os << ",\n";
-        Printer<typename T::value_type>::pprint(os, *it);
-        first = false;
-      }
-    }
-    os << "\n}";
-  }
-};
-
-// Range printer
-template <typename T>
-struct Printer<T, std::enable_if_t<is_range<T>::value && !is_map_like<T>::value && !is_set_like<T>::value>> {
-  static void print(std::ostream& os, const T& range) {
-    os << "[";
-    auto it = std::begin(range);
-    auto end = std::end(range);
-    bool first = true;
-    for (; it != end; ++it) {
-      if (!first) os << ", ";
-      Printer<typename std::iterator_traits<decltype(it)>::value_type>::print(
-          os, *it);
-      first = false;
-    }
-    os << "]";
-  }
-
-  static void pprint(std::ostream& os, const T& range) {
-    os << "[\n";
-    {
-      const indentos indent{os};
+      const indentos indent{ctx.os, false};
       auto it = std::begin(range);
       auto end = std::end(range);
       bool first = true;
       for (; it != end; ++it) {
-        if (!first) os << ",\n";
-        Printer<typename std::iterator_traits<decltype(it)>::value_type>::pprint(
-            os, *it);
+        if (!first) ctx.os << punct.sep;
+        ctx.os << ctx.nl;
+        if constexpr (is_map_like_v<T>) {
+          Printer<typename T::key_type>::print(ctx, it->first);
+          ctx.os << ": ";
+          Printer<typename T::mapped_type>::print(ctx, it->second);
+        } else {
+          Printer<value_type>::print(ctx, *it);
+        }
         first = false;
       }
     }
-    os << "\n]";
+    ctx.os << ctx.nl << punct.end;
   }
 };
 
-// Pair printer
+// pair printer
 template <typename T1, typename T2>
 struct Printer<std::pair<T1, T2>> {
-  static void print(std::ostream& os, const std::pair<T1, T2>& pair) {
-    os << "(";
-    Printer<T1>::print(os, pair.first);
-    os << ", ";
-    Printer<T2>::print(os, pair.second);
-    os << ")";
-  }
+  static void print(PrintContext ctx, const std::pair<T1, T2>& pair) {
+    const bool is_small = is_small_type_v<T1> && is_small_type_v<T2>;
+    static constexpr ListPuctuators punct = punct_statlist;
+    ctx.nl = is_small ? "" : ctx.nl;
 
-  static void pprint(std::ostream& os, const std::pair<T1, T2>& pair) {
-    os << "(\n";
+    ctx.os << punct.start;
     {
-      const indentos indent{os};
-      Printer<T1>::pprint(os, pair.first);
-      os << ",\n";
-      Printer<T2>::pprint(os, pair.second);
+      const indentos indent{ctx.os, false};
+      ctx.os << ctx.nl;
+      Printer<T1>::print(ctx, pair.first);
+      ctx.os << punct.sep << ctx.nl;
+      Printer<T2>::print(ctx, pair.second);
     }
-    os << "\n)";
+    ctx.os << ctx.nl << punct.end;
   }
 };
 
-// Tuple printer helper
-template <typename Tuple, size_t... Is>
-void print_tuple(std::ostream& os, const Tuple& t, std::index_sequence<Is...>) {
-  os << "(";
-  ((os << (Is == 0 ? "" : ", "),
-     Printer<std::tuple_element_t<Is, Tuple>>::print(os, std::get<Is>(t))),
-   ...);
-  os << ")";
-}
+// tuple printer
 
 template <typename Tuple, size_t... Is>
-void pprint_tuple(std::ostream& os, const Tuple& t, std::index_sequence<Is...>) {
-  os << "(\n";
+void print_tuple(PrintContext ctx, const Tuple& t, std::index_sequence<Is...>,
+                 ListPuctuators punct) {
+  const bool is_small =
+      (is_small_type<std::tuple_element_t<Is, Tuple>>::value && ...);
+  ctx.nl = is_small ? "" : ctx.nl;
+
+  ctx.os << punct.start;
   {
-    const indentos indent{os};
-    ((os << (Is == 0 ? "" : ",\n"),
-       Printer<std::tuple_element_t<Is, Tuple>>::pprint(os, std::get<Is>(t))),
+    const indentos indent{ctx.os, false};
+    ((ctx.os << (Is == 0 ? "" : punct.sep) << ctx.nl,
+      Printer<std::tuple_element_t<Is, Tuple>>::print(ctx, std::get<Is>(t))),
      ...);
   }
-  os << "\n)";
+  ctx.os << ctx.nl << punct.end;
 }
 
-// Tuple printer
 template <typename... Types>
 struct Printer<std::tuple<Types...>> {
-  static void print(std::ostream& os, const std::tuple<Types...>& t) {
-    print_tuple(os, t, std::index_sequence_for<Types...>{});
-  }
-
-  static void pprint(std::ostream& os, const std::tuple<Types...>& t) {
-    pprint_tuple(os, t, std::index_sequence_for<Types...>{});
+  static void print(PrintContext ctx, const std::tuple<Types...>& t) {
+    print_tuple(ctx, t, std::index_sequence_for<Types...>{}, punct_statlist);
   }
 };
 
-// Field printing helper
-template <typename T, typename FT>
-void print_field(std::ostream& os, const T& obj, FT T::*field,
-                 const char* name) {
-  os << name << ": ";
-  Printer<FT>::print(os, obj.*field);
-  os << ",\n";
-}
-
-// Pretty field printing helper
-template <typename T, typename FT>
-void pprint_field(std::ostream& os, const T& obj, FT T::*field,
-                 const char* name, bool& first) {
-  if (!first) os << ",\n";
-  os << name << ": ";
-  Printer<FT>::pprint(os, obj.*field);
-  first = false;
-}
-
-// Main print/pprint functions
+// optional printer
 template <typename T>
-void print(std::ostream& os, const T& val) {
-  Printer<T>::print(os, val);
+struct Printer<std::optional<T>> {
+  static void print(PrintContext ctx, const std::optional<T>& opt) {
+    if (opt) return Printer<T>::print(ctx, *opt);
+    ctx.os << ansi::fg::rgb(109, 183, 229);
+    ctx.os << "<nullopt>";
+    ctx.os << ansi::fg::deflt;
+  }
+};
+
+
+// struct printer
+
+template <typename FieldT>
+struct FieldInfo {
+  const char* name;
+  const FieldT& value;
+};
+
+// Deduction guide for FieldInfo
+template <typename FieldT>
+FieldInfo(const char*, const FieldT&) -> FieldInfo<FieldT>;
+
+// Strings are small if they're short
+template <typename FieldT>
+struct is_small_type<FieldInfo<FieldT>> : std::false_type {};
+
+template <typename... FieldTs>
+struct FieldInfos : std::tuple<FieldInfo<FieldTs>...> {
+  // using std::tuple<FieldInfo<FieldTs>...>::tuple;
+  constexpr FieldInfos(const std::tuple<FieldInfo<FieldTs>...>& field_infos)
+      : std::tuple<FieldInfo<FieldTs>...>(field_infos) {}
+};
+template <typename... FieldTs>
+FieldInfos(const std::tuple<FieldInfo<FieldTs>...>&) -> FieldInfos<FieldTs...>;
+
+template <typename... FieldTs>
+struct StructInfo {
+  const char* tname;
+  std::tuple<FieldInfo<FieldTs>...> field_infos;
+  // FieldInfos<FieldTs...> field_infos;
+
+  constexpr StructInfo(const char* tname, FieldInfo<FieldTs>... fields)
+      : tname(tname), field_infos(std::make_tuple(fields...)) {}
+};
+
+// Helper function to create StructInfo with simpler syntax
+template <typename... FieldTs>
+constexpr auto make_struct_info(const char* tname,
+                                FieldInfo<FieldTs>... fields) {
+  return StructInfo<FieldTs...>{tname, fields...};
 }
 
+// FieldInfo printer
 template <typename T>
-void pprint(std::ostream& os, const T& val) {
-  Printer<T>::pprint(os, val);
-}
+struct Printer<FieldInfo<T>> {
+  static void print(PrintContext ctx, const FieldInfo<T>& field_info) {
+    ctx.os << "."                           //
+           << ansi::fg::rgb(163, 223, 233)  //
+           << field_info.name               //
+           << ansi::fg::deflt               //
+           << "= ";
+    Printer<T>::print(ctx, field_info.value);
+  }
+};
+
+// StructInfo printer
+template <typename... FieldTs>
+struct Printer<StructInfo<FieldTs...>> {
+  static void print(PrintContext ctx,
+                    const StructInfo<FieldTs...>& struct_info) {
+    ctx.os << ansi::fg::rgb(99, 184, 159);
+    ctx.os << struct_info.tname;
+    ctx.os << ansi::fg::deflt;
+    print_tuple(ctx, struct_info.field_infos,
+                std::index_sequence_for<FieldTs...>{}, punct_keylist);
+  }
+};
