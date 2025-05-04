@@ -61,13 +61,6 @@ struct is_small_type {
   static constexpr bool value = sizeof(T) < 16;
 };
 
-struct PrintContext {
-  std::ostream& os;
-  const char* nl;
-
-  PrintContext(std::ostream& os, const char* nl = "\n") : os(os), nl(nl) {}
-};
-
 // Helper to get type name
 template <typename T>
 std::string get_typename() {
@@ -84,44 +77,41 @@ std::string get_typename() {
 // Base printer template
 template <typename T, typename = void>
 struct Printer {
-  static void print(PrintContext ctx, const T& val) {
+  static void print(std::ostream& os, const T& val) {
     if constexpr (has_print_method_v<T>) {
-      val.print(ctx.os);
+      val.print(os);
     } else if (is_string_like_v<T>) {
-      ctx.os << Theme::color_string;
-      ctx.os << "\"" << val << "\"";
-      ctx.os << Theme::color_reset;
+      os << Theme::color_string;
+      os << "\"" << val << "\"";
+      os << Theme::color_reset;
     } else if constexpr (has_ostream_operator_v<T>) {
       if (std::is_integral_v<T> || std::is_floating_point_v<T>)
-        ctx.os << Theme::color_number;
-      ctx.os << val;
-      ctx.os << Theme::color_reset;
+        os << Theme::color_number;
+      os << val;
+      os << Theme::color_reset;
     } else {
-      ctx.os << Theme::color_typename;
-      ctx.os << get_typename<T>() << "{}";
-      ctx.os << Theme::color_reset;
+      os << Theme::color_typename;
+      os << get_typename<T>() << "{}";
+      os << Theme::color_reset;
     }
   }
 };
 
 // Main print functions
 template <typename T>
-void print(std::ostream& os, const T& val, const char* nl = "\n") {
-  PrintContext ctx(os, nl);
-  Printer<T>::print(ctx, val);
+void print(std::ostream& os, const T& val) {
+  Printer<T>::print(os, val);
 }
 
 template <typename T>
-void printout(const T& val, const char* nl = "\n") {
-  PrintContext ctx(std::cout, nl);
-  Printer<T>::print(ctx, val);
+void printout(const T& val) {
+  Printer<T>::print(std::cout, val);
 }
 
 // Main print function
 template <typename T>
-void printerr(const T& val, const char* nl = "\n") {
-  PrintContext ctx(std::cerr, nl);
-  Printer<T>::print(ctx, val);
+void printerr(const T& val) {
+  Printer<T>::print(std::cerr, val);
 }
 
 // range print
@@ -171,105 +161,106 @@ struct PunctuatorSet {
   const char* start;
   const char* sep;
   const char* end;
+  const char* split = "\n";
 };
 namespace punct {
-static constexpr PunctuatorSet keylist{"{", ", ", "}"};
-static constexpr PunctuatorSet dynlist{"[", ", ", "]"};
-static constexpr PunctuatorSet statlist{"(", ", ", ")"};
+static constexpr PunctuatorSet keylist{"{", ", ", "}", "\n"};
+static constexpr PunctuatorSet dynlist{"[", ", ", "]", "\n"};
+static constexpr PunctuatorSet statlist{"(", ", ", ")", "\n"};
 };  // namespace punct
 
 // range printer
 template <typename T>
 struct Printer<T, std::enable_if_t<is_range_v<T> && !is_string_like_v<T>>> {
-  static void print(PrintContext ctx, const T& range) {
+  static void print(std::ostream& os, const T& range) {
     using value_type =
         typename std::iterator_traits<decltype(std::begin(range))>::value_type;
     static constexpr bool is_small = is_small_type_v<value_type>;
-    static constexpr PunctuatorSet punct =
-        has_keys_v<T> ? punct::keylist : punct::dynlist;
-    if constexpr (!is_map_like_v<T>) ctx.nl = is_small ? "" : ctx.nl;
+    PunctuatorSet punct = has_keys_v<T> ? punct::keylist : punct::dynlist;
+    punct.split = is_small ? "" : punct.split;
+    if constexpr (is_map_like_v<T>) punct.split = "\n";
 
-    ctx.os << punct.start;
+    os << punct.start;
     {
-      const indentos indent{ctx.os, false};
+      const indentos indent{os, false};
       auto it = std::begin(range);
       auto end = std::end(range);
       bool first = true;
       for (; it != end; ++it) {
-        if (!first) ctx.os << punct.sep;
-        ctx.os << ctx.nl;
+        if (!first) os << punct.sep;
+        os << punct.split;
         if constexpr (is_map_like_v<T>) {
-          Printer<typename T::key_type>::print(ctx, it->first);
-          ctx.os << ": ";
-          Printer<typename T::mapped_type>::print(ctx, it->second);
+          Printer<typename T::key_type>::print(os, it->first);
+          os << ": ";
+          Printer<typename T::mapped_type>::print(os, it->second);
         } else {
-          Printer<value_type>::print(ctx, *it);
+          Printer<value_type>::print(os, *it);
         }
         first = false;
       }
     }
-    ctx.os << ctx.nl << punct.end;
+    os << punct.split << punct.end;
   }
 };
 
 // pair printer
 template <typename T1, typename T2>
 struct Printer<std::pair<T1, T2>> {
-  static void print(PrintContext ctx, const std::pair<T1, T2>& pair) {
+  static void print(std::ostream& os, const std::pair<T1, T2>& pair) {
     const bool is_small = is_small_type_v<T1> && is_small_type_v<T2>;
-    static constexpr PunctuatorSet punct = punct::statlist;
-    ctx.nl = is_small ? "" : ctx.nl;
+    PunctuatorSet punct = punct::statlist;
+    punct.split = is_small ? "" : punct.split;
 
-    ctx.os << punct.start;
+    os << punct.start;
     {
-      const indentos indent{ctx.os, false};
-      ctx.os << ctx.nl;
-      Printer<T1>::print(ctx, pair.first);
-      ctx.os << punct.sep << ctx.nl;
-      Printer<T2>::print(ctx, pair.second);
+      const indentos indent{os, false};
+      os << punct.split;
+      Printer<T1>::print(os, pair.first);
+      os << punct.sep << punct.split;
+      Printer<T2>::print(os, pair.second);
     }
-    ctx.os << ctx.nl << punct.end;
+    os << punct.split << punct.end;
   }
 };
 
 // tuple printer
 
 template <typename... Types>
-void print_tuple(PrintContext ctx, const std::tuple<Types...>& t,
+void print_tuple(std::ostream& os, const std::tuple<Types...>& t,
                  PunctuatorSet punct) {
   const bool is_small = (is_small_type<Types>::value && ...);
-  ctx.nl = is_small ? "" : ctx.nl;
+  punct.split = is_small ? "" : punct.split;
 
-  ctx.os << punct.start;
+  os << punct.start;
   {
-    const indentos indent{ctx.os, false};
+    const indentos indent{os, false};
     std::apply(
         [&](auto... args) {
           bool first = true;
-          ((ctx.os << (first ? "" : punct.sep) << ctx.nl, first = false,
-            Printer<decltype(args)>::print(ctx, args)),
+          ((os << (first ? "" : punct.sep) << punct.split, first = false,
+            Printer<decltype(args)>::print(os, args)),
            ...);
         },
         t);
   }
-  ctx.os << ctx.nl << punct.end;
+  os << punct.split << punct.end;
 }
 
 template <typename... Types>
 struct Printer<std::tuple<Types...>> {
-  static void print(PrintContext ctx, const std::tuple<Types...>& t) {
-    print_tuple(ctx, t, punct::statlist);
+  static void print(std::ostream& os, const std::tuple<Types...>& t) {
+    print_tuple(os, t, punct::statlist);
   }
 };
 
 // optional printer
 template <typename T>
 struct Printer<std::optional<T>> {
-  static void print(PrintContext ctx, const std::optional<T>& opt) {
-    if (opt) return Printer<T>::print(ctx, *opt);
-    ctx.os << Theme::color_constant;
-    ctx.os << "<nullopt>";
-    ctx.os << Theme::color_reset;
+  static void print(std::ostream& os, const std::optional<T>& opt) {
+    if (opt) return Printer<T>::print(os, *opt);
+    os << Theme::color_constant;
+    os << "<nullopt>";
+    os << Theme::color_reset;
   }
 };
 
@@ -297,24 +288,24 @@ struct StructInfo {
 
 template <typename T>
 struct Printer<FieldInfo<T>> {
-  static void print(PrintContext ctx, const FieldInfo<T>& field_info) {
-    ctx.os << "."                    //
-           << Theme::color_variable  //
-           << field_info.name        //
-           << Theme::color_reset     //
-           << "= ";
-    Printer<T>::print(ctx, field_info.value);
+  static void print(std::ostream& os, const FieldInfo<T>& field_info) {
+    os << "."                    //
+       << Theme::color_variable  //
+       << field_info.name        //
+       << Theme::color_reset     //
+       << "= ";
+    Printer<T>::print(os, field_info.value);
   }
 };
 
 template <typename... FieldTs>
 struct Printer<StructInfo<FieldTs...>> {
-  static void print(PrintContext ctx,
+  static void print(std::ostream& os,
                     const StructInfo<FieldTs...>& struct_info) {
-    ctx.os << Theme::color_typename;
-    ctx.os << struct_info.tname;
-    ctx.os << Theme::color_reset;
-    print_tuple(ctx, struct_info.field_infos, punct::keylist);
+    os << Theme::color_typename;
+    os << struct_info.tname;
+    os << Theme::color_reset;
+    print_tuple(os, struct_info.field_infos, punct::keylist);
   }
 };
 
@@ -337,9 +328,9 @@ struct Printer<StructInfo<FieldTs...>> {
 #define PRINT_STRUCT(Type, fields...)                                    \
   template <>                                                            \
   struct Printer<Type> {                                                 \
-    static void print(PrintContext ctx, const Type& obj) {               \
+    static void print(std::ostream& os, const Type& obj) {               \
       const auto info = StructInfo(                                      \
           #Type, PP_FOREACH_LIST(PP_BIND(OBJ_FIELD_INFO, obj), fields)); \
-      ::print(ctx.os, info);                                             \
+      ::print(os, info);                                                 \
     }                                                                    \
   };
