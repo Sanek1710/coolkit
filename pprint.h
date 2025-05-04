@@ -1,16 +1,16 @@
 #pragma once
 
+#define PPRINT_USE_ABI
+
+#ifdef PPRINT_USE_ABI
+#include <cxxabi.h>
+#endif
+
 #include <optional>
 #include <tuple>
 #include <type_traits>
 
 #include "ansi.h"
-
-#define PPRINT_USE_ABI
-#ifdef PPRINT_USE_ABI
-#include "cxxabi.h"
-#endif
-
 #include "indentos.h"
 #include "macro.h"
 
@@ -190,11 +190,11 @@ struct Printer<T, std::enable_if_t<is_range_v<T> && !is_string_like_v<T>>> {
         if (!first) os << punct.sep;
         os << punct.split;
         if constexpr (is_map_like_v<T>) {
-          Printer<typename T::key_type>::print(os, it->first);
+          ::print(os, it->first);
           os << ": ";
-          Printer<typename T::mapped_type>::print(os, it->second);
+          ::print(os, it->second);
         } else {
-          Printer<value_type>::print(os, *it);
+          ::print(os, *it);
         }
         first = false;
       }
@@ -215,9 +215,9 @@ struct Printer<std::pair<T1, T2>> {
     {
       const indentos indent{os, false};
       os << punct.split;
-      Printer<T1>::print(os, pair.first);
+      ::print(os, pair.first);
       os << punct.sep << punct.split;
-      Printer<T2>::print(os, pair.second);
+      ::print(os, pair.second);
     }
     os << punct.split << punct.end;
   }
@@ -238,7 +238,7 @@ void print_tuple(std::ostream& os, const std::tuple<Types...>& t,
         [&](auto... args) {
           bool first = true;
           ((os << (first ? "" : punct.sep) << punct.split, first = false,
-            Printer<decltype(args)>::print(os, args)),
+            ::print(os, args)),
            ...);
         },
         t);
@@ -257,7 +257,7 @@ struct Printer<std::tuple<Types...>> {
 template <typename T>
 struct Printer<std::optional<T>> {
   static void print(std::ostream& os, const std::optional<T>& opt) {
-    if (opt) return Printer<T>::print(os, *opt);
+    if (opt) return ::print(os, *opt);
     os << Theme::color_constant;
     os << "<nullopt>";
     os << Theme::color_reset;
@@ -294,7 +294,7 @@ struct Printer<FieldInfo<T>> {
        << field_info.name        //
        << Theme::color_reset     //
        << "= ";
-    Printer<T>::print(os, field_info.value);
+    ::print(os, field_info.value);
   }
 };
 
