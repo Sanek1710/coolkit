@@ -1,6 +1,7 @@
 #pragma once
 
 #define PPRINT_USE_ABI
+#define PPRINT_COLORS
 
 #ifdef PPRINT_USE_ABI
 #include <cxxabi.h>
@@ -15,12 +16,21 @@
 #include "macro.h"
 
 namespace Theme {
+#ifdef PPRINT_COLORS
 static constexpr auto color_typename = ansi::fg::rgb(0x4EC9B0);
 static constexpr auto color_number = ansi::fg::rgb(0xB5CEA8);
 static constexpr auto color_string = ansi::fg::rgb(0xCE9178);
 static constexpr auto color_constant = ansi::fg::rgb(0x4FC1FF);
 static constexpr auto color_variable = ansi::fg::rgb(0x9CDCFE);
 static constexpr auto color_reset = ansi::fg::deflt;
+#else
+static constexpr auto color_typename = "";
+static constexpr auto color_number = "";
+static constexpr auto color_string = "";
+static constexpr auto color_constant = "";
+static constexpr auto color_variable = "";
+static constexpr auto color_reset = "";
+#endif
 }  // namespace Theme
 
 // Helper to detect if type has print method
@@ -84,6 +94,10 @@ struct Printer {
       os << Theme::color_string;
       os << "\"" << val << "\"";
       os << Theme::color_reset;
+    } else if constexpr (std::is_enum_v<T>) {
+      os << Theme::color_constant;
+      os << val;
+      os << Theme::color_reset;
     } else if constexpr (has_ostream_operator_v<T>) {
       if (std::is_integral_v<T> || std::is_floating_point_v<T>)
         os << Theme::color_number;
@@ -116,6 +130,13 @@ void printerr(const T& val) {
   std::cerr << "\n";
 }
 
+template <typename T>
+std::string stringify(const T& val) {
+  std::stringstream ss;
+  print(ss, val);
+  return ss.str();
+}
+
 // range print
 
 template <typename T, typename = void>
@@ -125,6 +146,9 @@ template <typename T>
 struct is_range<T, std::void_t<decltype(std::begin(std::declval<T>())),
                                decltype(std::end(std::declval<T>()))>>
     : std::true_type {};
+
+template <typename T>
+struct is_range<T, std::enable_if_t<std::is_array_v<T>>> : std::true_type {};
 
 template <typename T>
 constexpr bool is_range_v = is_range<T>::value;
@@ -272,6 +296,7 @@ template <typename FieldT>
 struct FieldInfo {
   const char* name;
   const FieldT& value;
+  FieldInfo(const char* name, const FieldT& value) : name(name), value(value) {}
 };
 template <typename FieldT>
 FieldInfo(const char*, const FieldT&) -> FieldInfo<FieldT>;

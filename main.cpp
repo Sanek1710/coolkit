@@ -19,6 +19,7 @@
 #include "coolkit/macro.h"
 #include "coolkit/memstat.h"
 #include "coolkit/pprint.h"
+#include "coolkit/enum.h"
 
 // Custom type with ostream operator
 struct Point {
@@ -65,6 +66,11 @@ struct Person2 {
 
 PRINT_STRUCT(Person2, name, age, hobbies);
 MEMSTAT_STRUCT(Person2, name, age, hobbies);
+
+
+enum Values { Some, Sort, Of };
+ENUM(Values, Some, Sort, Of);
+ENUM_OSTREAM(Values)
 
 int main(int, char**) {
   int clr = 0;
@@ -148,6 +154,12 @@ int main(int, char**) {
   printout(str.capacity());
   str += 'a';
   printout(str.capacity());
+
+
+  static constexpr auto val0 = Enum<Values>::size;
+  static constexpr auto val1 = Enum<Values>::values;
+  static constexpr auto val2 = Enum<Values>::string(Values::Some);
+  Enum<Values>::foreach (printout<Values>);
 
   return 0;
 }
