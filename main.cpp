@@ -15,11 +15,11 @@
 #include <vector>
 
 #include "coolkit/ansi.h"
+#include "coolkit/enum.h"
 #include "coolkit/indentos.h"
 #include "coolkit/macro.h"
 #include "coolkit/memstat.h"
 #include "coolkit/pprint.h"
-#include "coolkit/enum.h"
 
 // Custom type with ostream operator
 struct Point {
@@ -45,7 +45,7 @@ struct Printer<Complex> {
 
 // Example class with print method
 class Person {
- private:
+ public:
   std::string name;
   int age;
   std::vector<std::string> hobbies;
@@ -54,19 +54,19 @@ class Person {
   Person(std::string n, int a, std::vector<std::string> h)
       : name(std::move(n)), age(a), hobbies(std::move(h)) {}
 
-  INLINE_PRINT(Person, name, age, hobbies);
   INLINE_MEMSTAT(Person, name, age, hobbies);
 };
+PRINT_STRUCT(Person, name, age, hobbies);
 
 struct Person2 {
   std::string name;
   int age;
   std::vector<std::string> hobbies;
+  INLINE_PRINT(Person2, name, age, hobbies);
 };
 
-PRINT_STRUCT(Person2, name, age, hobbies);
-MEMSTAT_STRUCT(Person2, name, age, hobbies);
 
+MEMSTAT_STRUCT(Person2, name, age, hobbies);
 
 enum Values { Some, Sort, Of };
 ENUM(Values, Some, Sort, Of);
@@ -89,13 +89,13 @@ int main(int, char**) {
   int x = 42;
   printout(x);  // Uses ostream operator
 
-  print(std::cerr, Point{1, 2});
+  printout(Point{1, 2});
 
   // Nested containers
   std::vector<std::pair<int, std::string>> vec = {{1, "one"}, {2, "two"}};
   printout(vec);  // Will print: [(1, one), (2, two)]
 
-  print(std::cerr, strs);
+  printout(strs);
 
   std::list<int> lst = {1, 2, 3};
   printout(lst);  // [1, 2, 3]
@@ -154,7 +154,6 @@ int main(int, char**) {
   printout(str.capacity());
   str += 'a';
   printout(str.capacity());
-
 
   static constexpr auto val0 = Enum<Values>::size;
   static constexpr auto val1 = Enum<Values>::values;
