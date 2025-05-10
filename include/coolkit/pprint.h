@@ -257,7 +257,7 @@ struct Printer<T, std::enable_if_t<is_range_v<T> && !is_string_like_v<T>>> {
 
     ctx.os << punct.start;
     {
-      const indentos indent{ctx.os, false};
+      const indent::ostream_lifetime indent{ctx.os, false};
       auto it = std::begin(range);
       auto end = std::end(range);
       bool first = true;
@@ -289,7 +289,7 @@ struct Printer<std::pair<T1, T2>> {
 
     ctx.os << punct.start;
     {
-      const indentos indent{ctx.os, false};
+      const indent::ostream_lifetime indent{ctx.os, false};
       ctx.os << punct.split;
       ::print_impl(ctx, pair.first);
       ctx.os << punct.sep << punct.split;
@@ -310,7 +310,7 @@ void print_tuple(PrintContext ctx, const std::tuple<Types...>& t,
 
   ctx.os << punct.start;
   {
-    const indentos indent{ctx.os, false};
+    const indent::ostream_lifetime indent{ctx.os, false};
     std::apply(
         [&](auto... args) {
           bool first = true;
