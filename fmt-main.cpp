@@ -13,6 +13,7 @@
 #include "coolkit/fmtstruct.h"
 #include "coolkit/indentos.h"
 #include "coolkit/macro.h"
+#include "coolkit/memstat.h"
 #include "coolkit/pprint.h"
 #include "coolkit/structinfo.h"
 #include "fmt/base.h"
@@ -46,6 +47,8 @@ class Person {
   friend fmt::formatter<Person>;
 };
 
+MEMSTAT_STRUCT(Person, hobbies, points);
+
 template <>
 struct fmt ::formatter<Person> : struct_formatter {
   template <typename Context>
@@ -56,6 +59,7 @@ struct fmt ::formatter<Person> : struct_formatter {
         .fieldf("hobbies", obj.hobbies)
         .fieldf("points", obj.points, "{::cnt}")
         .fieldf("height", obj.height);
+    format_to(ctx.out(), fg(color::dim_gray), "[{}]", memstat(obj).nbytes);
     return ctx.out();
   }
 };
@@ -67,6 +71,7 @@ struct fmt ::formatter<Point> : struct_formatter {
     structf("Point", ctx, flags | flag_values_only, {",", "(", ")"})
         .fieldf("x", obj.x)
         .fieldf("y", obj.y);
+    format_to(ctx.out(), fg(color::dim_gray), "[{}]", memstat(obj).nbytes);
     return ctx.out();
   }
 };
@@ -90,6 +95,10 @@ int main() {
 
   std::cerr << fmt::format("{:nc}\n", p1);
   std::cerr << fmt::format("{:c}\n", p1);
+  {
+    indent::ctrl::ostream indentos{std::cerr};
+    std::cerr << fmt::format("{::cnt}\n", persons);
+  }
 
   return 0;
 }
