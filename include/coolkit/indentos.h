@@ -100,8 +100,8 @@ namespace ctrl {
 namespace details {
 
 static constexpr char esc = '\033';
-static constexpr char push_ctrl = '+';
-static constexpr char pop_ctrl = '-';
+static constexpr char push_ctrl = '>';
+static constexpr char pop_ctrl = '<';
 
 }  // namespace details
 

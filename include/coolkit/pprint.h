@@ -1,7 +1,6 @@
 #pragma once
 
 #define PPRINT_USE_ABI
-#define PPRINT_COLORS
 
 #ifdef PPRINT_USE_ABI
 #include <cxxabi.h>
@@ -15,9 +14,10 @@
 #include "indentos.h"
 #include "macro.h"
 #include "memstat.h"
+#include "structinfo.h"
 
 namespace Theme {
-#ifdef PPRINT_COLORS
+
 static constexpr auto color_typename = ansi::fg::rgb(0x4EC9B0);
 static constexpr auto color_number = ansi::fg::rgb(0xB5CEA8);
 static constexpr auto color_string = ansi::fg::rgb(0xCE9178);
@@ -27,15 +27,7 @@ static constexpr auto color_memstat = ansi::fg::rgb(0x2D2D2E);
 // static constexpr auto color_function = ansi::fg::rgb(0xDCDCAA);
 // static constexpr auto color_inactive_function = ansi::fg::rgb(0x8D8D6F);
 static constexpr auto color_reset = ansi::fg::deflt;
-#else
-static constexpr auto color_typename = "";
-static constexpr auto color_number = "";
-static constexpr auto color_string = "";
-static constexpr auto color_constant = "";
-static constexpr auto color_variable = "";
-static constexpr auto color_memstat = "";
-static constexpr auto color_reset = "";
-#endif
+
 }  // namespace Theme
 
 // Helper to detect if type has print method
@@ -344,26 +336,10 @@ struct Printer<std::optional<T>> {
 // struct printer
 
 template <typename FieldT>
-struct FieldInfo {
-  const char* name;
-  const FieldT& value;
-  FieldInfo(const char* name, const FieldT& value) : name(name), value(value) {}
-};
-
-template <typename FieldT>
 struct is_small_type<FieldInfo<FieldT>> : std::false_type {};
 
 template <typename T>
 struct is_memstattable<FieldInfo<T>> : std::false_type {};
-
-template <typename... FieldTs>
-struct StructInfo {
-  const char* tname;
-  std::tuple<FieldInfo<FieldTs>...> field_infos;
-
-  constexpr StructInfo(const char* tname, FieldInfo<FieldTs>... fields)
-      : tname(tname), field_infos(std::make_tuple(fields...)) {}
-};
 
 template <typename... Ts>
 struct is_memstattable<StructInfo<Ts...>> : std::false_type {};
@@ -393,26 +369,17 @@ struct Printer<StructInfo<FieldTs...>> {
 
 // convenience macro
 
-#define FIELD_INFO(field) \
-  FieldInfo {             \
-#field, field         \
-  }
-#define INLINE_PRINT(Type, fields...)                                         \
-  void print(PrintContext ctx) const {                                        \
-    const auto info = StructInfo(#Type, PP_FOREACH_LIST(FIELD_INFO, fields)); \
-    ::print_impl(ctx, info);                                                  \
+#define INLINE_PRINT(Type, ...)                                \
+  void print(PrintContext ctx) const {                         \
+    const auto info = STRUCT_INFO((*this), Type, __VA_ARGS__); \
+    ::print_impl(ctx, info);                                   \
   }
 
-#define OBJ_FIELD_INFO(obj, field) \
-  FieldInfo {                      \
-#field, obj.field              \
-  }
-#define PRINT_STRUCT(Type, fields...)                                    \
-  template <>                                                            \
-  struct Printer<Type> {                                                 \
-    static void print(PrintContext ctx, const Type& obj) {               \
-      const auto info = StructInfo(                                      \
-          #Type, PP_FOREACH_LIST(PP_BIND(OBJ_FIELD_INFO, obj), fields)); \
-      ::print_impl(ctx, info);                                           \
-    }                                                                    \
+#define PRINT_STRUCT(Type, ...)                              \
+  template <>                                                \
+  struct Printer<Type> {                                     \
+    static void print(PrintContext ctx, const Type& obj) {   \
+      const auto info = STRUCT_INFO(obj, Type, __VA_ARGS__); \
+      ::print_impl(ctx, info);                               \
+    }                                                        \
   };
